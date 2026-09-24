@@ -1,68 +1,56 @@
 import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-import joblib
 import os
-import json
+import joblib
+import logging
+import argparse
+from sklearn.ensemble import RandomForestRegressor
 
-def train_model(data_path='data/raw/server_metrics.csv', model_dir='models', metrics_dir='metrics'):
-    print("Loading data...")
-    if not os.path.exists(data_path):
-        print(f"Error: Data file not found at {data_path}")
-        return
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def load_processed_data(data_dir: str):
+    logger.info(f"Loading processed training data from {data_dir}")
+    X_train_path = os.path.join(data_dir, 'X_train.csv')
+    y_train_path = os.path.join(data_dir, 'y_train.csv')
+    
+    if not os.path.exists(X_train_path) or not os.path.exists(y_train_path):
+        raise FileNotFoundError(f"Processed training data not found in {data_dir}. Run preprocess.py first.")
         
-    df = pd.read_csv(data_path)
-    
-    # Feature engineering (e.g., hour of day)
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
-    df['hour'] = df['timestamp'].dt.hour
-    df['day_of_week'] = df['timestamp'].dt.dayofweek
-    
-    # Define features and target
-    features = ['cpu_usage', 'memory_usage', 'disk_usage', 'network_in', 
-                'network_out', 'request_count', 'response_time', 'hour', 'day_of_week']
-    target = 'future_cpu_usage'
-    
-    X = df[features]
-    y = df[target]
-    
-    print("Splitting data into train and test sets (time-based split)...")
-    # For time series, it's better not to shuffle, though standard Random Forest doesn't inherently model sequence
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, shuffle=False)
-    
-    print("Training RandomForestRegressor...")
+    X_train = pd.read_csv(X_train_path)
+    y_train = pd.read_csv(y_train_path).squeeze("columns") # ensure it's a Series
+    return X_train, y_train
+
+def train_model(X_train, y_train):
+    logger.info("Initializing RandomForestRegressor")
+    # Using a reasonably constrained RF to prevent massive file sizes and overfitting
     model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1)
+    
+    logger.info("Training model... this might take a moment")
     model.fit(X_train, y_train)
-    
-    print("Evaluating model...")
-    predictions = model.predict(X_test)
-    mse = mean_squared_error(y_test, predictions)
-    mae = mean_absolute_error(y_test, predictions)
-    r2 = r2_score(y_test, predictions)
-    
-    metrics = {
-        'mse': mse,
-        'rmse': float(np.sqrt(mse)),
-        'mae': mae,
-        'r2': r2
-    }
-    
-    print(f"Metrics: {metrics}")
-    
-    # Save model
-    os.makedirs(model_dir, exist_ok=True)
-    model_path = os.path.join(model_dir, 'rf_model.joblib')
-    joblib.dump(model, model_path)
-    print(f"Model saved to {model_path}")
-    
-    # Save metrics
-    os.makedirs(metrics_dir, exist_ok=True)
-    metrics_path = os.path.join(metrics_dir, 'metrics.json')
-    with open(metrics_path, 'w') as f:
-        json.dump(metrics, f, indent=4)
-    print(f"Metrics saved to {metrics_path}")
+    logger.info("Model training completed")
+    return model
+
+def main(data_dir, model_dir):
+    try:
+        X_train, y_train = load_processed_data(data_dir)
+        model = train_model(X_train, y_train)
+        
+        os.makedirs(model_dir, exist_ok=True)
+        model_path = os.path.join(model_dir, 'server_cpu_model.pkl')
+        
+        logger.info(f"Saving trained model to {model_path}")
+        joblib.dump(model, model_path)
+        logger.info("Training pipeline complete!")
+        
+    except Exception as e:
+        logger.error(f"Error during training: {str(e)}")
+        raise
 
 if __name__ == "__main__":
-    train_model()
+    parser = argparse.ArgumentParser(description="Train ML model on preprocessed data")
+    parser.add_argument('--data-dir', type=str, default='data/processed', help='Directory containing processed data')
+    parser.add_argument('--model-dir', type=str, default='models', help='Directory to save the trained model')
+    args = parser.parse_args()
+    
+    main(args.data_dir, args.model_dir)

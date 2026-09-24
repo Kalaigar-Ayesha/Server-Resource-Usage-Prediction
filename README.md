@@ -4,54 +4,55 @@
 The goal of this project is to predict future server CPU utilization based on historical server metrics. By accurately forecasting CPU usage, infrastructure teams can proactively scale resources, optimize costs, and prevent performance degradation.
 
 ## Dataset
-Since real server metrics are not currently available, a synthetic dataset is generated to simulate realistic server behavior. It includes daily usage patterns (e.g., peak hours during the day), workload variations, correlations between metrics (like request count and CPU usage), and random noise.
+A synthetic dataset is generated to simulate realistic server behavior. It includes daily usage patterns, workload variations, correlations between metrics, and random noise.
 
 ## Features
-The dataset contains the following features (collected at 5-minute intervals):
-- `timestamp`: The date and time of the measurement.
+- `timestamp`: Date and time of the measurement.
 - `cpu_usage`: Current CPU utilization percentage (0-100%).
 - `memory_usage`: Current memory utilization percentage (0-100%).
 - `disk_usage`: Disk I/O or space usage metric.
-- `network_in`: Incoming network traffic (e.g., Mbps).
-- `network_out`: Outgoing network traffic (e.g., Mbps).
-- `request_count`: Number of requests processed in the time window.
-- `response_time`: Average response time of requests (ms).
+- `network_in` & `network_out`: Incoming/Outgoing network traffic.
+- `request_count`: Number of requests processed.
+- `response_time`: Average response time of requests.
+- `hour` & `day_of_week`: Extracted temporal features.
 
 ## Target
 - `future_cpu_usage`: CPU utilization 1 hour (12 steps of 5 minutes) in the future.
 
-## ML Approach
-This initial version uses a traditional machine learning approach. A `RandomForestRegressor` is employed as a baseline model to capture non-linear relationships and interactions between the features without requiring complex deep learning architectures.
+## ML Pipeline Architecture
+This project utilizes a cleanly separated pipeline for data processing, training, and evaluation:
 
-## How to Run the Project
+1. **Preprocessing (`src/preprocess.py`)**: Cleans data, extracts features, performs time-based splitting, and scales numeric features.
+2. **Training (`src/train.py`)**: Trains a `RandomForestRegressor` on the processed data.
+3. **Evaluation (`src/evaluate.py`)**: Computes MAE, RMSE, R² and generates visualizations.
 
-1. **Install Dependencies**
-   Ensure you have Python 3.11 installed. Create a virtual environment and install the requirements:
-   ```bash
-   python -m venv venv
-   # On Windows
-   venv\Scripts\activate
-   
-   pip install -r requirements.txt
-   ```
+### Preventing Data Leakage
+In time-series forecasting, data leakage occurs when future information is accidentally used to predict the past. We strictly prevent this via two mechanisms:
+1. **Chronological Splitting**: We do **not** use random shuffling. The dataset is strictly divided into chronologically sequential blocks: Train (70%) → Validation (15%) → Test (15%). This mimics a real-world scenario where a model trained on past data predicts unseen future data.
+2. **Isolated Scaling**: The `StandardScaler` is fitted **only** on the training set. The validation and test sets are transformed using this learned scale, ensuring no future statistical distributions leak into the training phase.
 
-2. **Generate Synthetic Data**
-   Run the data generation script to create the synthetic dataset:
-   ```bash
-   python src/generate_data.py
-   ```
-   This will save a CSV file in `data/raw/server_metrics.csv`.
+## How to Run the Workflow
 
-3. **Exploratory Data Analysis (EDA)**
-   You can run the EDA script to visualize the data patterns and feature correlations:
-   ```bash
-   python notebooks/01_exploratory_data_analysis.py
-   ```
-   This will output some summary statistics and generate a few PNG plots in your root directory.
+**1. Generate Raw Data**
+*(Make sure your environment is activated and dependencies are installed via `pip install -r requirements.txt`)*
+```bash
+python src/generate_data.py
+```
 
-4. **Train the Model**
-   Run the training script to train a `RandomForestRegressor` on the generated data:
-   ```bash
-   python src/train.py
-   ```
-   This will save the trained model to `models/rf_model.joblib` and evaluation metrics to `metrics/metrics.json`.
+**2. Preprocess the Data**
+Creates chronological splits and scales features. Output is saved to `data/processed/`.
+```bash
+python src/preprocess.py
+```
+
+**3. Train the Model**
+Trains the RandomForest model and saves it to `models/server_cpu_model.pkl`.
+```bash
+python src/train.py
+```
+
+**4. Evaluate the Model**
+Evaluates against the test set and generates `metrics.json` and a prediction plot in `metrics/`.
+```bash
+python src/evaluate.py
+```
