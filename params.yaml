@@ -1,0 +1,19 @@
+base:
+  random_state: 42
+
+data_generation:
+  num_days: 30
+  interval_minutes: 5
+  output_path: data/raw/server_metrics.csv
+
+preprocessing:
+  val_size: 0.15
+  test_size: 0.15
+
+training:
+  n_estimators: 100
+  max_depth: 10
+
+evaluation:
+  r2_threshold: 0.3
+  mae_threshold: 15.0

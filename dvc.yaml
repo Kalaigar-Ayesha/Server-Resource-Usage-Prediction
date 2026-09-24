@@ -3,6 +3,10 @@ stages:
     cmd: python src/generate_data.py
     deps:
       - src/generate_data.py
+    params:
+      - base.random_state
+      - data_generation.num_days
+      - data_generation.interval_minutes
     outs:
       - data/raw/server_metrics.csv
 
@@ -11,6 +15,9 @@ stages:
     deps:
       - src/preprocess.py
       - data/raw/server_metrics.csv
+    params:
+      - preprocessing.val_size
+      - preprocessing.test_size
     outs:
       - data/processed/
       - models/scaler.pkl
@@ -21,6 +28,10 @@ stages:
       - src/train.py
       - data/processed/X_train.csv
       - data/processed/y_train.csv
+    params:
+      - base.random_state
+      - training.n_estimators
+      - training.max_depth
     outs:
       - models/server_cpu_model.pkl
 
@@ -31,6 +42,9 @@ stages:
       - data/processed/X_test.csv
       - data/processed/y_test.csv
       - models/server_cpu_model.pkl
+    params:
+      - evaluation.r2_threshold
+      - evaluation.mae_threshold
     metrics:
       - metrics/metrics.json:
           cache: false
