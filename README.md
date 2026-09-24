@@ -6,53 +6,49 @@ The goal of this project is to predict future server CPU utilization based on hi
 ## Dataset
 A synthetic dataset is generated to simulate realistic server behavior. It includes daily usage patterns, workload variations, correlations between metrics, and random noise.
 
-## Features
-- `timestamp`: Date and time of the measurement.
-- `cpu_usage`: Current CPU utilization percentage (0-100%).
-- `memory_usage`: Current memory utilization percentage (0-100%).
-- `disk_usage`: Disk I/O or space usage metric.
-- `network_in` & `network_out`: Incoming/Outgoing network traffic.
-- `request_count`: Number of requests processed.
-- `response_time`: Average response time of requests.
-- `hour` & `day_of_week`: Extracted temporal features.
-
-## Target
-- `future_cpu_usage`: CPU utilization 1 hour (12 steps of 5 minutes) in the future.
+## Features & Target
+- Target: `future_cpu_usage` (CPU utilization 1 hour in the future).
+- Features: CPU, memory, disk, network traffic, request counts, response time, and extracted temporal features.
 
 ## ML Pipeline Architecture
-This project utilizes a cleanly separated pipeline for data processing, training, and evaluation:
+This project utilizes a cleanly separated pipeline:
+1. **Preprocessing (`src/preprocess.py`)**: Cleans data, performs time-based splitting, and scales numeric features.
+2. **Training (`src/train.py`)**: Trains a `RandomForestRegressor`.
+3. **Evaluation (`src/evaluate.py`)**: Computes metrics (MAE, RMSE, R²) and generates visualizations.
 
-1. **Preprocessing (`src/preprocess.py`)**: Cleans data, extracts features, performs time-based splitting, and scales numeric features.
-2. **Training (`src/train.py`)**: Trains a `RandomForestRegressor` on the processed data.
-3. **Evaluation (`src/evaluate.py`)**: Computes MAE, RMSE, R² and generates visualizations.
+*(Anti-leakage: Uses strict chronological splitting and isolated scaling).*
 
-### Preventing Data Leakage
-In time-series forecasting, data leakage occurs when future information is accidentally used to predict the past. We strictly prevent this via two mechanisms:
-1. **Chronological Splitting**: We do **not** use random shuffling. The dataset is strictly divided into chronologically sequential blocks: Train (70%) → Validation (15%) → Test (15%). This mimics a real-world scenario where a model trained on past data predicts unseen future data.
-2. **Isolated Scaling**: The `StandardScaler` is fitted **only** on the training set. The validation and test sets are transformed using this learned scale, ensuring no future statistical distributions leak into the training phase.
+---
 
-## How to Run the Workflow
+## MLOps / DVC Workflow
 
-**1. Generate Raw Data**
-*(Make sure your environment is activated and dependencies are installed via `pip install -r requirements.txt`)*
-```bash
-python src/generate_data.py
-```
+This project uses **DVC (Data Version Control)** to manage the ML pipeline. DVC tracks large datasets, models, and execution graphs in a way that Git cannot.
 
-**2. Preprocess the Data**
-Creates chronological splits and scales features. Output is saved to `data/processed/`.
-```bash
-python src/preprocess.py
-```
+### Why DVC?
+Git is designed for tracking small text files (source code), not multi-gigabyte datasets or binary `.pkl` model files. If you commit large files to Git, the repository becomes bloated, slow, and GitHub will reject files over 100MB.
+Instead, **Git tracks a tiny metadata file (`dvc.lock`)**, while **DVC tracks the actual large files** and stores them in a remote storage (like S3, Google Drive, or a local network drive). When you checkout a specific Git branch, `dvc pull` restores the exact dataset and model associated with that branch's code.
 
-**3. Train the Model**
-Trains the RandomForest model and saves it to `models/server_cpu_model.pkl`.
-```bash
-python src/train.py
-```
+### Pipeline Stages (`dvc.yaml`)
+Our DVC pipeline is defined in `dvc.yaml` and executes as a DAG (Directed Acyclic Graph):
+`generate_data` → `preprocess` → `train` → `evaluate`
 
-**4. Evaluate the Model**
-Evaluates against the test set and generates `metrics.json` and a prediction plot in `metrics/`.
-```bash
-python src/evaluate.py
-```
+Because the pipeline tracks dependencies, DVC knows exactly which steps need to be re-run if you change a file. (e.g., If you edit `train.py`, `dvc repro` will skip generating data and preprocessing, and jump straight to training!).
+
+### How to reproduce this project from scratch:
+
+1. **Install requirements:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. **Pull DVC Data (if cloning on a new machine):**
+   ```bash
+   dvc pull
+   ```
+3. **Reproduce the Pipeline:**
+   ```bash
+   dvc repro
+   ```
+4. **Compare Metrics (if you made code changes):**
+   ```bash
+   dvc metrics diff
+   ```

@@ -1,0 +1,39 @@
+stages:
+  generate_data:
+    cmd: python src/generate_data.py
+    deps:
+      - src/generate_data.py
+    outs:
+      - data/raw/server_metrics.csv
+
+  preprocess:
+    cmd: python src/preprocess.py
+    deps:
+      - src/preprocess.py
+      - data/raw/server_metrics.csv
+    outs:
+      - data/processed/
+      - models/scaler.pkl
+
+  train:
+    cmd: python src/train.py
+    deps:
+      - src/train.py
+      - data/processed/X_train.csv
+      - data/processed/y_train.csv
+    outs:
+      - models/server_cpu_model.pkl
+
+  evaluate:
+    cmd: python src/evaluate.py
+    deps:
+      - src/evaluate.py
+      - data/processed/X_test.csv
+      - data/processed/y_test.csv
+      - models/server_cpu_model.pkl
+    metrics:
+      - metrics/metrics.json:
+          cache: false
+    plots:
+      - metrics/prediction_vs_actual.png:
+          cache: false
