@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import mlflow
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,8 @@ class ModelEvaluation:
         with open(os.path.join(metrics_dir, 'metrics.json'), 'w') as f:
             json.dump(metrics, f, indent=4)
             
+        mlflow.log_metrics(metrics)
+            
         logger.info(f"Metrics: MAE={mae:.4f}, RMSE={np.sqrt(mse):.4f}, R2={r2:.4f}")
         
         r2_threshold = self.config.get('r2_threshold', 0.5)
@@ -64,5 +67,7 @@ class ModelEvaluation:
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        plt.savefig(os.path.join(metrics_dir, 'prediction_vs_actual.png'))
+        plot_path = os.path.join(metrics_dir, 'prediction_vs_actual.png')
+        plt.savefig(plot_path)
+        mlflow.log_artifact(plot_path)
         logger.info("Evaluation complete.")

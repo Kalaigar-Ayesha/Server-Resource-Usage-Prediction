@@ -4,6 +4,7 @@ from src.components.data_validation import DataValidation
 from src.components.data_transformation import DataTransformation
 from src.components.model_training import ModelTraining
 from src.components.model_evaluation import ModelEvaluation
+import mlflow
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -19,24 +20,28 @@ class TrainingPipeline:
     def run_pipeline(self):
         logger.info(">>> Training Pipeline Started <<<")
         
-        # 1. Data Ingestion
-        data_path = self.data_ingestion.initiate_data_ingestion()
+        mlflow.set_tracking_uri("sqlite:///mlflow.db")
+        mlflow.set_experiment("server_resource_prediction")
         
-        # 2. Data Validation
-        is_valid = self.data_validation.initiate_data_validation(data_path)
-        if not is_valid:
-            raise Exception("Data validation failed. Pipeline terminated.")
+        with mlflow.start_run():
+            # 1. Data Ingestion
+            data_path = self.data_ingestion.initiate_data_ingestion()
             
-        # 3. Data Transformation
-        self.data_transformation.initiate_data_transformation(data_path)
-        
-        # 4. Model Training
-        self.model_training.initiate_model_training()
-        
-        # 5. Model Evaluation
-        self.model_evaluation.initiate_model_evaluation()
-        
-        logger.info(">>> Training Pipeline Completed Successfully <<<")
+            # 2. Data Validation
+            is_valid = self.data_validation.initiate_data_validation(data_path)
+            if not is_valid:
+                raise Exception("Data validation failed. Pipeline terminated.")
+                
+            # 3. Data Transformation
+            self.data_transformation.initiate_data_transformation(data_path)
+            
+            # 4. Model Training
+            self.model_training.initiate_model_training()
+            
+            # 5. Model Evaluation
+            self.model_evaluation.initiate_model_evaluation()
+            
+            logger.info(">>> Training Pipeline Completed Successfully <<<")
 
 if __name__ == "__main__":
     pipeline = TrainingPipeline()

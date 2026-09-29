@@ -4,6 +4,7 @@ import logging
 import joblib
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
+import mlflow
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,11 @@ class ModelTraining:
         max_depth = self.config.get('max_depth', 10)
         
         logger.info(f"Training RandomForestRegressor (n_estimators={n_estimators}, max_depth={max_depth})")
+        
+        mlflow.log_param("n_estimators", n_estimators)
+        mlflow.log_param("max_depth", max_depth)
+        mlflow.log_param("random_state", self.random_state)
+        
         model = RandomForestRegressor(
             n_estimators=n_estimators,
             max_depth=max_depth,
@@ -36,4 +42,5 @@ class ModelTraining:
         
         os.makedirs(model_dir, exist_ok=True)
         joblib.dump(model, os.path.join(model_dir, 'server_cpu_model.pkl'))
+        mlflow.sklearn.log_model(model, "model")
         logger.info("Model saved successfully.")
